@@ -3,12 +3,15 @@
 
 #define EPS2 0.67f
 #define BSIZE 256
-#define softeningSquared 0.025f
-#define damping 0.999f
+#define DAMPING 0.999f
+#define DAMPINT_BOUNDARY 0.9f
+
+#define CHECK_BOUNDARY 0
 
 __device__  __shared__ float4 shPosition[256];
 
-__device__ float3 calc_accel_body(float4 bi, float4 bj, float3 ai) {
+__device__ float3 calc_accel_body(float4 bi, float4 bj, float3 ai) 
+{
 	float3 r;
 	r.x = bj.x - bi.x;
 	r.y = bj.y - bi.y;
@@ -21,13 +24,14 @@ __device__ float3 calc_accel_body(float4 bi, float4 bj, float3 ai) {
 
 	float s = bj.w * invDistCube;
 
-	ai.x += r.x * s;// * EPS2;
-	ai.y += r.y * s;// * EPS2;
-	ai.z += r.z * s;// * EPS2;
+	ai.x += r.x * s;
+	ai.y += r.y * s;
+	ai.z += r.z * s;
 	return ai;
 }
 
-__device__ float3 calc_accel(float4 myPosition, float3 accel) {
+__device__ float3 calc_accel(float4 myPosition, float3 accel) 
+{
 	int i;
 	extern __shared__ float4 shPosition[];
 
@@ -37,7 +41,8 @@ __device__ float3 calc_accel(float4 myPosition, float3 accel) {
 	return accel;
 }
 
-__global__ void galaxyKernel(float4 * pdata, unsigned int bodies, float step) {
+__global__ void galaxyKernel(float4 * pdata, unsigned int bodies, float step) 
+{
 	// shared memory
 	extern __shared__ float4 shPosition[];
 
@@ -68,9 +73,10 @@ __global__ void galaxyKernel(float4 * pdata, unsigned int bodies, float step) {
 	myVelocity.y += acc.y * step; // * 2.0f;
 	myVelocity.z += acc.z * step; // * 2.0f;
 
-	myVelocity.x *= damping;
-	myVelocity.y *= damping;
-	myVelocity.z *= damping;
+	// damping
+	myVelocity.x *= DAMPING;
+	myVelocity.y *= DAMPING;
+	myVelocity.z *= DAMPING;
 
 	// update position
 	myPosition.x += myVelocity.x * step;
@@ -78,15 +84,23 @@ __global__ void galaxyKernel(float4 * pdata, unsigned int bodies, float step) {
 	myPosition.z += myVelocity.z * step;
 
 	__syncthreads();
-
+#if CHECK_BOUNDARY
+	if(myPosition.x > 650.0f || myPosition.x < -150.0f){
+		myVelocity.x *= -1.0f * DAMPINT_BOUNDARY;
+	}
+	if(myPosition.y > 650.0f || myPosition.y < -150.0f){
+		myVelocity.y *= -1.0f * DAMPINT_BOUNDARY;
+	}
+#endif
 	// update device memory
 	pdata[pLoc] = myPosition;
 	pdata[vLoc] = myVelocity;
 }
 
-extern "C" void cudaComputeGalaxy(float4 * pdata, int N, float step) {
+extern "C" void cudaComputeGalaxy(float4 * pdata, int N, float step) 
+{
 	dim3 block(16, 16, 1);
-	int dim = sqrt(N / 256);
+	int dim = sqrt(N / BSIZE);
 	dim3 grid(dim ,dim ,1);
 
 	grid.y = grid.y == 0 ? 1 : grid.y;
