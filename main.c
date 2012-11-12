@@ -11,16 +11,16 @@
 
 #include "display.h"
 
-// simulation parameter
+#define MAXSTR 256
 
+// simulation parameter
 float scaleFactor = 1.0f;
-float velFactor = 8.0f; // 15.0f, 100
-float massFactor = 0.0001f; //120000.0f; // 50000000.0,
-float gStep = 0.025f; // 0.005f
-//float gStep = 2;
+float velFactor = 8.0f; 
+float massFactor = 0.0001f; 
+float gStep = 0.025f; 
 
 int numBodies = 1024;
-bool skipneeded = false;
+bool randData = false;
 
 // simulation data storage
 float* gPos = 0;
@@ -63,7 +63,7 @@ int main(void) {
 	printf("max concurrent kernels %d \n", props.concurrentKernels);
 	printf("number of bodies %d \n", numBodies);
 */
-	if(false){
+	if(randData){
 		loadDataRand(numBodies);
 	}else{
 		loadData("data/data.tab", numBodies);
@@ -112,11 +112,8 @@ void loadDataRand(int bodies) {
 	}
 }
 
-#define MAXSTR 256
-
 void loadData(char* filename, int bodies) {
 	FILE *fin;
-	int skip = 49152 / numBodies;
 	if ((fin = fopen(filename, "r"))) {
 
 		char buf[MAXSTR];
@@ -131,13 +128,7 @@ void loadData(char* filename, int bodies) {
 		for (i = 0; i < bodies; i++) {
 
 			// depend on input size...
-			int j;
-			if (skipneeded) {
-				for (j = 0; j < skip; j++)
-					fgets(buf, MAXSTR, fin); // lead line
-			} else {
-				fgets(buf, MAXSTR, fin);
-			}
+			fgets(buf, MAXSTR, fin);
 			sscanf(buf, "%f %f %f %f %f %f %f", v + 0, v + 1, v + 2, v + 3,
 					v + 4, v + 5, v + 6);
 
@@ -159,7 +150,7 @@ void loadData(char* filename, int bodies) {
 
 	} else {
 		printf("cannot find file...: %s\n", filename);
-		exit(0);
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -184,15 +175,16 @@ void init(int bodies) {
 		vidx = bodies * 4 + idx;
 
 		// set value from global data storage
+		float randX = (random() - random()) * 0.00000002f;
+		float randY = (random() - random()) *  0.00000002f;
 		h_particleData[idx + 0] = gPos[idx + 0]; // x
 		h_particleData[idx + 1] = gPos[idx + 1]; // y
 		h_particleData[idx + 2] = gPos[idx + 2]; // z
 		h_particleData[idx + 3] = gPos[idx + 3]; // mass
-		h_particleData[vidx + 0] = gVel[idx + 0]; // vx
-		h_particleData[vidx + 1] = gVel[idx + 1]; // vy
+		h_particleData[vidx + 0] = gVel[idx + 0] + randX; // vx
+		h_particleData[vidx + 1] = gVel[idx + 1] + randY; // vy
 		h_particleData[vidx + 2] = gVel[idx + 2]; // vz
 		h_particleData[vidx + 3] = gVel[idx + 3]; // padding
-
 	}
 
 	// copy initial value to GPU memory
