@@ -8,6 +8,7 @@
 #include <device_types.h>
 #include <vector_types.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "display.h"
 
@@ -18,6 +19,8 @@ float scaleFactor = 1.0f;
 float velFactor = 8.0f; 
 float massFactor = 0.0001f; 
 float gStep = 0.025f; 
+
+bool gpu = true;
 
 int numBodies = 1024;
 bool randData = false;
@@ -47,8 +50,7 @@ void check() {
 }
 
 int count = 0;
-int main(void) {
-
+int main( int argc, char *argv[] ) {
 	initDisplay();
 	// get number of SMs on this GPU
 	int devID;
@@ -63,6 +65,24 @@ int main(void) {
 	printf("max concurrent kernels %d \n", props.concurrentKernels);
 	printf("number of bodies %d \n", numBodies);
 */
+
+	if(argc == 2)
+	{
+		if(strcmp(argv[1], "--cpu") == 0)
+		{
+			gpu = false;
+		}
+		else if(strcmp(argv[1], "--gpu") == 0)
+		{
+			gpu = true;
+		}
+		else
+		{
+			printf("wrong argument %s \nallowed: NULL, --cpu, --gpu \n", argv[1]);
+			exit(EXIT_FAILURE);
+		}
+	}
+
 	if(randData){
 		loadDataRand(numBodies);
 	}else{
@@ -80,8 +100,10 @@ int main(void) {
 
 	printf("finished...\n");
 
-	cudaFree(d_particleData);
-
+	if(gpu)
+	{
+		cudaFree(d_particleData);
+	}
 	closeWindow();
 	printf("close...\n");
 	return EXIT_SUCCESS;
@@ -162,9 +184,11 @@ void init(int bodies) {
 	h_particleData = (float *) malloc(8 * bodies * sizeof(float));
 
 	// device particle data
-	cudaMalloc((void**) &d_particleData, 8 * bodies * sizeof(float));
-	check();
-
+	if(gpu)
+	{
+		cudaMalloc((void**) &d_particleData, 8 * bodies * sizeof(float));
+		check();
+	}
 	// load inital data set
 	int idx = 0;
 	int vidx = 0;
@@ -187,21 +211,31 @@ void init(int bodies) {
 		h_particleData[vidx + 3] = gVel[idx + 3]; // padding
 	}
 
-	// copy initial value to GPU memory
-	cudaMemcpy(d_particleData, h_particleData, 8 * bodies * sizeof(float),
-			cudaMemcpyHostToDevice);
-	check();
+	if(gpu)
+	{
+		// copy initial value to GPU memory
+		cudaMemcpy(d_particleData, h_particleData, 8 * bodies * sizeof(float),
+				cudaMemcpyHostToDevice);
+		check();
+	}
 
 }
 
 extern void cudaComputeGalaxy(float4 * pdata, int N, float step);
+extern void cComputeGalaxy(float4 * pdata, int N, float step);
 
 void runCuda(void) {
-	cudaComputeGalaxy((float4*) d_particleData, numBodies, gStep);
-	check();
+	if(gpu)
+	{
+		cudaComputeGalaxy((float4*) d_particleData, numBodies, gStep);
+		check();
 
-	cudaMemcpy(h_particleData, d_particleData, 4 * numBodies * sizeof(float),
-			cudaMemcpyDeviceToHost);
-	check();
-
+		cudaMemcpy(h_particleData, d_particleData, 4 * numBodies * sizeof(float),
+		cudaMemcpyDeviceToHost);
+		check();
+	}
+	else
+	{
+		cComputeGalaxy((float4*) h_particleData, numBodies, gStep);
+	}
 }

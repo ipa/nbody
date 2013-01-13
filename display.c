@@ -102,6 +102,11 @@ void clear(){
 	XClearWindow(theDisplay, theWindow);
 }
 
+void flushDisplay(void* theDisplay)
+{
+	XFlush((Display*)theDisplay);
+}
+
 void showGalaxy(float* data, int bodies, bool consoleoutput) {
 	int i, idx, vidx;
 	clear();
@@ -124,7 +129,13 @@ void showGalaxy(float* data, int bodies, bool consoleoutput) {
 	}
 
 	framerateUpdate();
-	XFlush(theDisplay);
+
+	/*pthread_t thread1;
+	int  iret1;
+	
+	iret1 = pthread_create( &thread1, NULL, flushDisplay, (void*)theDisplay);
+	pthread_join(&thread1);*/
+	flushDisplay(theDisplay);
 }
 
 void closeWindow(){
